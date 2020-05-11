@@ -160,7 +160,8 @@ class Images extends Component {
             currentDevice: '',
             currentDirectory: '',
             childDirectories: [],
-            noOfImageLoaded: 0
+            noOfImageLoaded: 0,
+            downloadOption: false
         };
     }
 
@@ -498,8 +499,17 @@ class Images extends Component {
         })
     }
 
+    setDownloadOption = (bool) => {
+        this.setState({
+            downloadOption: bool
+        })
+    }
+
     download = () => {
-        ipcRenderer.send('image-download', this.state.selected);
+        ipcRenderer.send('image-download', {
+            selected: this.state.selected,
+            option: this.state.downloadOption
+        });
         this.props.setImageDownloading(true);
         this.setState({
             downloading: true
@@ -570,7 +580,8 @@ class Images extends Component {
             currentDevice,
             currentDirectory,
             childDirectories,
-            noOfImageLoaded
+            noOfImageLoaded,
+            downloadOption
         } = this.state;
 
         const {
@@ -658,7 +669,24 @@ class Images extends Component {
                                 </Dropdown>
                             </Col>
                             <Col>
-                                <Button className="download" variant="light" onClick={this.download}>Download</Button>
+                                <Dropdown as={ButtonGroup}>
+                                    <Button className="download" variant="light" onClick={this.download}>Download</Button>
+                                    <Dropdown.Toggle split variant="light" id="sort-split" />
+                                    <Dropdown.Menu>
+                                        <Dropdown.Item
+                                            active={!downloadOption}
+                                            onClick={() => this.setDownloadOption(false)}
+                                        >
+                                            Normal Download
+                                        </Dropdown.Item>
+                                        <Dropdown.Item
+                                            active={downloadOption}
+                                            onClick={() => this.setDownloadOption(true)}
+                                        >
+                                            Maintain Directory Structure
+                                        </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                </Dropdown>
                             </Col>
                         </Row>
                     </TopBarStyle>

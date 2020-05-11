@@ -356,10 +356,27 @@ ipcMain.on('get-array-of-images', (event) => {
   }
 })
 
-function copyImageFile(image, i, arg) {
+function copyImageFile(parentDir, image, i, arg, option) {
   return new Promise((resolve, reject) => {
     const fileName = image.replace(/^.*[\\\/]/, '');
-    const downloadPath = path.join(arg, '/', fileName);
+    if (option) {
+      let arrayOfDir = [parentDir.replace(/^.*[\\\/]/, '')];
+      while(1) {
+        let str = image.replace(parentDir+"/", "");
+        let index = str.indexOf('/');
+        if (index==-1)
+          break;
+        parentDir = path.join(parentDir, '/', str.substring(0, index));
+        arrayOfDir.push(str.substring(0, index));
+      }
+      for (let i=0; i<arrayOfDir.length; i++) {
+        arg = path.join(arg, '/', arrayOfDir[i]);
+        if (!fs.existsSync(arg)) {
+          fs.mkdirSync(arg);
+        }
+      }
+    }
+    let downloadPath = path.join(arg, '/', fileName);
     try {
       var file = fs.readFileSync(downloadPath);
       if (file) {
@@ -419,8 +436,8 @@ ipcMain.on('image-download', async (event, arg) => {
       properties: ["openDirectory"]
     }, () => {});
     //console.log(arg);
-    for (let i=0; i<arg.length; i++) {
-      await copyImageFile(arg[i], i, downloadPath.filePaths[0]);
+    for (let i=0; i<arg.selected.length; i++) {
+      await copyImageFile(currentImageDirectory, arg.selected[i], i, downloadPath.filePaths[0], arg.option);
     }
   }
 })
@@ -659,9 +676,26 @@ ipcMain.on('get-array-of-documents', (event) => {
 })
 
 
-function copyDocumentFile(document, i, arg) {
+function copyDocumentFile(parentDir, document, i, arg, option) {
   return new Promise((resolve, reject) => {
     const fileName = document.replace(/^.*[\\\/]/, '');
+    if (option) {
+      let arrayOfDir = [parentDir.replace(/^.*[\\\/]/, '')];
+      while(1) {
+        let str = document.replace(parentDir+"/", "");
+        let index = str.indexOf('/');
+        if (index==-1)
+          break;
+        parentDir = path.join(parentDir, '/', str.substring(0, index));
+        arrayOfDir.push(str.substring(0, index));
+      }
+      for (let i=0; i<arrayOfDir.length; i++) {
+        arg = path.join(arg, '/', arrayOfDir[i]);
+        if (!fs.existsSync(arg)) {
+          fs.mkdirSync(arg);
+        }
+      }
+    }
     const downloadPath = path.join(arg, '/', fileName);
     try {
       var file = fs.readFileSync(downloadPath);
@@ -715,8 +749,8 @@ ipcMain.on('document-download', async (event, arg) => {
       properties: ["openDirectory"]
     }, () => {});
     //console.log(arg);
-    for (let i=0; i<arg.length; i++) {
-      await copyDocumentFile(arg[i], i, downloadPath.filePaths[0]);
+    for (let i=0; i<arg.selected.length; i++) {
+      await copyDocumentFile(currentDocumentDirectory, arg.selected[i], i, downloadPath.filePaths[0], arg.option);
     }
   }
 })
@@ -956,9 +990,26 @@ ipcMain.on('get-array-of-songs', (event) => {
 })
 
 
-function copySongFile(song, i, arg) {
+function copySongFile(parentDir, song, i, arg, option) {
   return new Promise((resolve, reject) => {
     const fileName = song.replace(/^.*[\\\/]/, '');
+    if (option) {
+      let arrayOfDir = [parentDir.replace(/^.*[\\\/]/, '')];
+      while(1) {
+        let str = song.replace(parentDir+"/", "");
+        let index = str.indexOf('/');
+        if (index==-1)
+          break;
+        parentDir = path.join(parentDir, '/', str.substring(0, index));
+        arrayOfDir.push(str.substring(0, index));
+      }
+      for (let i=0; i<arrayOfDir.length; i++) {
+        arg = path.join(arg, '/', arrayOfDir[i]);
+        if (!fs.existsSync(arg)) {
+          fs.mkdirSync(arg);
+        }
+      }
+    }
     const downloadPath = path.join(arg, '/', fileName);
     try {
       var file = fs.readFileSync(downloadPath);
@@ -1012,8 +1063,8 @@ ipcMain.on('song-download', async (event, arg) => {
       properties: ["openDirectory"]
     }, () => {});
     //console.log(arg);
-    for (let i=0; i<arg.length; i++) {
-      await copySongFile(arg[i], i, downloadPath.filePaths[0]);
+    for (let i=0; i<arg.selected.length; i++) {
+      await copySongFile(currentSongDirectory, arg.selected[i], i, downloadPath.filePaths[0], arg.option);
     }
   }
 })

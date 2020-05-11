@@ -158,7 +158,8 @@ class Songs extends Component {
             alertActionForAll: false,
             currentDevice: '',
             currentDirectory: '',
-            childDirectories: []
+            childDirectories: [],
+            downloadOption: false
         };
     }
 
@@ -519,8 +520,17 @@ class Songs extends Component {
         })
     }
 
+    setDownloadOption = (bool) => {
+        this.setState({
+            downloadOption: bool
+        })
+    }
+
     download = () => {
-        ipcRenderer.send('song-download', this.state.selected);
+        ipcRenderer.send('song-download', {
+            selected: this.state.selected,
+            option: this.state.downloadOption
+        });
         this.props.setSongDownloading(true);
         this.setState({
             downloading: true
@@ -573,6 +583,18 @@ class Songs extends Component {
         
     }
 
+    formatBytes = (bytes, decimals = 2) => {
+        if (bytes === 0) return '0 Bytes';
+    
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
     render() {
 
         const {
@@ -590,7 +612,8 @@ class Songs extends Component {
             alertAction,
             currentDevice,
             currentDirectory,
-            childDirectories
+            childDirectories,
+            downloadOption
         } = this.state;
 
         const {
@@ -676,7 +699,24 @@ class Songs extends Component {
                                 </Dropdown>
                             </Col>
                             <Col>
-                                <Button className="download" variant="light" onClick={this.download}>Download</Button>
+                                <Dropdown as={ButtonGroup}>
+                                    <Button className="download" variant="light" onClick={this.download}>Download</Button>
+                                    <Dropdown.Toggle split variant="light" id="sort-split" />
+                                    <Dropdown.Menu>
+                                        <Dropdown.Item
+                                            active={!downloadOption}
+                                            onClick={() => this.setDownloadOption(false)}
+                                        >
+                                            Normal Download
+                                        </Dropdown.Item>
+                                        <Dropdown.Item
+                                            active={downloadOption}
+                                            onClick={() => this.setDownloadOption(true)}
+                                        >
+                                            Maintain Directory Structure
+                                        </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                </Dropdown>
                             </Col>
                         </Row>
                     </TopBarStyle>
@@ -721,7 +761,7 @@ class Songs extends Component {
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Name</th>
-                                                    <th>Size (B)</th>
+                                                    <th>Size</th>
                                                     <th>Last Modified (dd/mm/yyyy)</th>
                                                 </tr>
                                             </thead>
@@ -730,7 +770,7 @@ class Songs extends Component {
                                                 songs.map((song, i) => {
                                                     //console.log(song);
                                                     var name = song.name.replace(/_/g,"-");
-                                                    var size = song.size;
+                                                    var size = this.formatBytes(song.size);
                                                     var date = new Date(song.lastModified);
                                                     var key = 'key-' + i;
                                                     //console.log(date);
