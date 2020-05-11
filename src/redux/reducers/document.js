@@ -91,6 +91,22 @@ export default (state=initialState, action) => {
                 alertActionForAll: action.payload
             }
         }
+        case 'DOCUMENT_RESET':
+        {
+            return {
+                index: 1,
+                sortType: 0,
+                order: true,
+                selectAll: false,
+                progressBar: 0,
+                downloading: false,
+                alert: false,
+                alertFile: '',
+                selected: [],
+                alertAction: null,
+                alertActionForAll: false
+            }
+        }
         default:
             return state
     }

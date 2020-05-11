@@ -3,16 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "main": "public/electron.js",
-  "author": "Captain Electron",
+  "author": "Bobby <singhpurshotam1@gmail.com>",
   "homepage": "./",
   "build": {
-    "appId": "com.example.electron-cra",
-    "files": [
-      "build/**/*",
-      "node_modules/**/*"
-    ],
-    "directories": {
-      "buildResources": "assets"
+    "appId": "com.bobby.backupp-app",
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "category": "Utility"
     }
   },
   "dependencies": {
@@ -52,13 +51,16 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "react-build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "electron-dev": "concurrently \"BROWSER=none yarn start\" \"wait-on http://localhost:3000 && electron .\"",
     "electron-pack": "yarn build && yarn electron-build",
     "preelectron-pack": "yarn build",
-    "electron-build": "electron-builder"
+    "electron-build": "electron-builder",
+    "release": "yarn react-build && electron-builder --publish=always",
+    "build": "yarn react-build && yarn electron-build",
+    "dist:linux": "yarn react-build && yarn electron-build --linux"
   },
   "eslintConfig": {
     "extends": "react-app"

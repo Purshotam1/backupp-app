@@ -10,7 +10,8 @@ import {
     ButtonGroup, 
     ProgressBar, 
     Toast, 
-    Image 
+    Image,
+    Spinner 
 } from 'react-bootstrap';
 import { connect } from 'react-redux';
 import {
@@ -24,7 +25,8 @@ import {
     setImageAlertFile,
     setImageSelected,
     setImageAlertAction,
-    setImageAlertActionForAll
+    setImageAlertActionForAll,
+    setImageReset
 } from '../redux/actions/image'
 
 
@@ -41,7 +43,7 @@ const TopBarStyle = styled.div`
 
     position: sticky;
     top:0;
-    z-index: 1000;
+    z-index: 1001;
 
     .col {
         display: flex;
@@ -50,9 +52,54 @@ const TopBarStyle = styled.div`
     }
 
     .row {
-        z-index: 1000;
-        background-color: white;
-        border-bottom: 2px solid black;
+        background-color: #3a7e9a;
+        border-bottom: 2px solid white;
+    }
+
+    .input-group-text {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+    }
+
+    .checkbox span {
+        padding: 0 0;
+    }
+
+    .unselect {
+        margin-left: auto; 
+        margin-right: auto;
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .dropdown button {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .dropdown-menu {
+        background-color: #dae0e5;
+    }
+
+    .download {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
     }
 
 `
@@ -62,10 +109,35 @@ const ContentStyle = styled.div`
         padding: 10px;
     }
 
+    .dropdown button {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .directory-dropdown {
+        height: 50vh;
+        overflow: auto;
+        background-color: #dae0e5;
+    }
 `
 
 const DownloadingStyle = styled.div`
-    
+    .progress-bar {
+        background-color: #212529;
+    }
+
+    .toast-body p {
+        color: #212529;
+    }
+
+    .toast-body button {
+        margin: 5px;
+    }
 `
 
 class Images extends Component {
@@ -74,7 +146,7 @@ class Images extends Component {
 
         this.state = {
             selectAll: false,
-            images: [],
+            images: Array(12).fill(null),
             isLoading: false,
             index: 1,
             noOfImages: 0,
@@ -85,82 +157,184 @@ class Images extends Component {
             selected: [],
             alertAction: null,
             alertActionForAll: false,
-            deviceConnected: true
+            currentDevice: '',
+            currentDirectory: '',
+            childDirectories: [],
+            noOfImageLoaded: 0
         };
     }
 
     componentDidMount() {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            index: this.props.image.index,
+            order: this.props.image.order,
+            sortType: this.props.image.sortType,
+            selectAll: this.props.image.selectAll,
+            downloading: this.props.image.downloading,
+            selected: this.props.image.selected,
+            alertAction: this.props.image.alertAction,
+            alertActionForAll: this.props.image.alertActionForAll
         })
-        ipcRenderer.send('get-images', this.props.image.index*12 -12);
-        ipcRenderer.on('device-not-connected', (event) => {
+        ipcRenderer.send('get-images', { 
+            index: this.props.image.index*12 -12,
+            pageNo: this.props.image.index 
+        });
+        ipcRenderer.once('current-directory', (event, arg) => {
             this.setState({
-                deviceConnected: false
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
             })
         })
-        ipcRenderer.on('no-of-images', (event, arg) => {
-            var temp = [];
-            var index = this.props.image.index;
-            for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                if ((i*12 -12) < arg)
-                    temp.push(i);
-                else
-                    break;
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+            if (arg==0) {
+                this.setState({
+                    isLoading: false
+                })
             }
-            this.setState({
-                noOfImages: arg,
-                indexArray: temp
-            });
         })
-        ipcRenderer.on('images', (event, arg) => {
-            this.setState({
-                images: arg,
-                index: this.props.image.index,
-                order: this.props.image.order,
-                sortType: this.props.image.sortType,
-                selectAll: this.props.image.selectAll,
-                downloading: this.props.image.downloading,
-                selected: this.props.image.selected,
-                alertAction: this.props.image.alertAction,
-                alertActionForAll: this.props.image.alertActionForAll,
-                isLoading: false
-            });
+        ipcRenderer.removeAllListeners('image');
+        ipcRenderer.on('image', (event, arg) => {
+            let images = this.state.images;
+            let index = this.props.image.index;
+            //console.log(arg);
+            if (arg.pageNo == index) {
+                //console.log(arg.key);
+                images[arg.id] = arg;
+                this.setState({
+                    images,
+                    noOfImageLoaded: this.state.noOfImageLoaded -1,
+                    isLoading: false
+                })
+            }
         });
-        
-        ipcRenderer.on('reset', (event) => {
-            this.props.setImageIndex(1);
-            this.props.setImageSortType(0);
-            this.props.setImageOrder(true);
-            this.props.setImageSelectAll(false);
-            this.props.setImageProgressBar(0);
-            this.props.setImageDownloading(false);
-            this.props.setImageAlert(false);
-            this.props.setImageAlertFile('');
-            this.props.setImageSelected([]);
-            this.props.setImageAlertAction(null);
-            this.props.setImageAlertActionForAll(false);
-
+        ipcRenderer.removeAllListeners('no-of-image-loaded');
+        ipcRenderer.on('no-of-image-loaded', (event, arg) => {
             this.setState({
-                images: [],
-                index: 1,
-                sortType: 0,
-                order: true,
-                selectAll: false,
-                downloading: false,
-                selected: [],
-                alertAction: null,
-                alertActionForAll: false,
-                deviceConnected: true,
+                noOfImageLoaded: this.state.noOfImageLoaded+arg
             })
         })
     }
 
-    tryAgain = () => {
-        ipcRenderer.send('get-images', this.props.image.index*12 -12);
+    previousDir = () => {
         this.setState({
-            deviceConnected: true
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
         })
+        this.props.setImageReset();
+        this.props.setImageOrder(this.state.order);
+        this.props.setImageSortType(this.state.sortType);
+        ipcRenderer.send('change-image-directory', {
+            isChild: false
+        });
+        ipcRenderer.once('image-directory-changed', (event, arg) => {
+            const {
+                sortType,
+                order
+            } = this.state;
+    
+            if (sortType===0) {
+                ipcRenderer.send('image-sort-by-name', order);
+            } else if (sortType===1) {
+                ipcRenderer.send('image-sort-by-size', order);
+            } else {
+                ipcRenderer.send('image-sort-by-last-modified', order);
+            }
+
+            ipcRenderer.once('image-sorted', (event) => {
+                if (arg.isEmpty) {
+                    this.setState({
+                        isLoading: false
+                    })
+                } else {
+                    ipcRenderer.send('get-images', { 
+                        index: this.props.image.index*12 -12,
+                        pageNo: this.props.image.index 
+                    });
+                }
+            })
+        })
+        ipcRenderer.once('current-directory', (event, arg) => {
+            this.setState({
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
+            })
+        })
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+        })
+    }
+
+    changeDir = (dir) => {
+        this.setState({
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
+        })
+        this.props.setImageReset();
+        this.props.setImageOrder(this.state.order);
+        this.props.setImageSortType(this.state.sortType);
+        ipcRenderer.send('change-image-directory', {
+            name: dir,
+            isChild: true
+        });
+        ipcRenderer.once('image-directory-changed', (event, arg) => {
+            const {
+                sortType,
+                order
+            } = this.state;
+    
+            if (sortType===0) {
+                ipcRenderer.send('image-sort-by-name', order);
+            } else if (sortType===1) {
+                ipcRenderer.send('image-sort-by-size', order);
+            } else {
+                ipcRenderer.send('image-sort-by-last-modified', order);
+            }
+
+            ipcRenderer.once('image-sorted', (event) => {
+                if (arg.isEmpty) {
+                    this.setState({
+                        isLoading: false
+                    })
+                } else {
+                    ipcRenderer.send('get-images', { 
+                        index: this.props.image.index*12 -12,
+                        pageNo: this.props.image.index 
+                    });
+                }
+            })
+        })
+        ipcRenderer.once('current-directory', (event, arg) => {
+            this.setState({
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
+            })
+        })
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+        })
+    }
+
+    setIndexArray = (index, totalImages) => {
+        var temp = [];
+        for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
+            if ((i*12 -12) < totalImages)
+                temp.push(i);
+            else
+                break;
+        }
+        this.props.setImageIndex(index);
+        this.setState({
+            index: index,
+            indexArray: temp,
+            noOfImages: totalImages,
+        });
     }
 
     setOrder = (arg) => {
@@ -179,7 +353,9 @@ class Images extends Component {
 
     sort = () => {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
         })
         const {
             sortType,
@@ -197,94 +373,70 @@ class Images extends Component {
         ipcRenderer.once('image-sorted', (event) => {
             const index = 1;
             const noOfImages = this.state.noOfImages;
-            ipcRenderer.send('get-more-images', index*12 -12);
-            ipcRenderer.once('more-images', (event, arg) => {
-                var temp = [];
-                for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                    if ((i*12 -12) < noOfImages)
-                        temp.push(i);
-                    else
-                        break;
-                }
-                this.props.setImageIndex(index);
-                this.setState({
-                    images: arg,
-                    index: index,
-                    indexArray: temp,
-                    isLoading: false
-                });
+            ipcRenderer.send('get-more-images', { 
+                index: index*12 -12,
+                pageNo: index 
             });
+            ipcRenderer.once('no-of-images', (event, arg) => {
+                this.setIndexArray(this.props.image.index, arg);
+            })
+            this.setIndexArray(index, noOfImages);
         })
     }
 
     next = () => {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
         });
         const index = this.state.index + 1;
         const noOfImages = this.state.noOfImages;
-        ipcRenderer.send('get-more-images', index*12 -12);
-        ipcRenderer.once('more-images', (event, arg) => {
-            var temp = [];
-            for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                if ((i*12 -12) < noOfImages)
-                    temp.push(i);
-                else
-                    break;
-            }
-            this.props.setImageIndex(index);
-            this.setState({
-                images: arg,
-                index: index,
-                indexArray: temp,
-                isLoading: false
-            });
+        ipcRenderer.send('get-more-images', { 
+            index: index*12 -12,
+            pageNo: index 
         });
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+        })
+        this.setIndexArray(index, noOfImages);
+        window.scrollTo(0, 0);
     }
 
     prev = () => {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
         })
         const index = this.state.index - 1;
         const noOfImages = this.state.noOfImages;
-        ipcRenderer.send('get-more-images', index*12 -12)
-        ipcRenderer.once('more-images', (event, arg) => {
-            var temp = [];
-            for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                if ((i*12 -12) < noOfImages)
-                    temp.push(i);
-                else
-                    break;
-            }
-            this.props.setImageIndex(index);
-            this.setState({
-                images: arg,
-                index: index,
-                indexArray: temp,
-                isLoading: false
-            });
-        });
+        ipcRenderer.send('get-more-images', { 
+            index: index*12 -12,
+            pageNo: index 
+        })
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+        })
+        this.setIndexArray(index, noOfImages);
+        window.scrollTo(0, 0);
     }
 
     setImages = (index) => {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            images: Array(12).fill(null),
+            noOfImageLoaded: 0
         })
-        ipcRenderer.send('get-more-images', (index*12)-12)
-        ipcRenderer.once('more-images', (event, arg) => {
-            var temp = [];
-            for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                temp.push(i);
-            }
-            this.props.setImageIndex(index);
-            this.setState({
-                images: arg,
-                indexArray: temp,
-                index: index,
-                isLoading: false
-            });
-        });
+        ipcRenderer.send('get-more-images', { 
+            index: index*12 -12,
+            pageNo: index 
+        })
+        ipcRenderer.once('no-of-images', (event, arg) => {
+            this.setIndexArray(this.props.image.index, arg);
+        })
+        this.setIndexArray(index, this.state.noOfImages);
+        window.scrollTo(0, 0);
     }
 
     selectImage = (i) => {
@@ -415,7 +567,10 @@ class Images extends Component {
             selected,
             alertActionForAll,
             alertAction,
-            deviceConnected
+            currentDevice,
+            currentDirectory,
+            childDirectories,
+            noOfImageLoaded
         } = this.state;
 
         const {
@@ -423,25 +578,13 @@ class Images extends Component {
             alertFile,
             progressBar
         } = this.props.image;
-
-        if (!deviceConnected) {
+        //console.log(noOfImageLoaded);
+        if (isLoading) {
             return (
-                <>
-                    <h1>
-                        Device Not Connected
-                        <Button variant="outline-danger" onClick={this.tryAgain}>
-                            Try Again
-                        </Button>
-                    </h1>
-                </>
-            )
-        }
-
-        if (isLoading||images.length===0) {
-            return (
-                <h1 style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                    Loading...
-                </h1>
+                <div style={{height: '100vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    <Spinner animation="border" />
+                    <h3 style={{marginBottom: '0', marginLeft: '10px'}}>Loading Files, please wait</h3>
+                </div>
             );
         }
 
@@ -456,14 +599,16 @@ class Images extends Component {
                                         <InputGroup.Text>Select All</InputGroup.Text>
                                     </InputGroup.Prepend>
                                     <InputGroup.Append style={{marginRight: 'auto'}}>
-                                        <InputGroup.Checkbox checked={selectAll} onChange={this.selectAllChange} />
+                                        <div style={{margin: 'auto'}} className="checkbox">
+                                            <InputGroup.Checkbox checked={selectAll} onChange={this.selectAllChange} />
+                                        </div>
                                     </InputGroup.Append>
                                 </InputGroup>
                             </Col>
                             <Col>
                                 <InputGroup>
                                     <Button
-                                        style={{marginLeft: 'auto', marginRight: 'auto'}} 
+                                        className="unselect"
                                         onClick={this.unselectAll} 
                                         variant="light"
                                     >
@@ -513,7 +658,7 @@ class Images extends Component {
                                 </Dropdown>
                             </Col>
                             <Col>
-                                <Button variant="light" onClick={this.download}>Download</Button>
+                                <Button className="download" variant="light" onClick={this.download}>Download</Button>
                             </Col>
                         </Row>
                     </TopBarStyle>
@@ -522,64 +667,117 @@ class Images extends Component {
                             <ContentStyle>
                                 <Row>
                                     <Col>
+                                        <Dropdown as={ButtonGroup}>
+                                            <Button
+                                                onClick={this.previousDir}
+                                                disabled={(currentDirectory==currentDevice)}
+                                                variant='outline-light'
+                                            >
+                                                Back
+                                            </Button>
+                                            <p style={{margin: 'auto'}}>
+                                                {(currentDevice==currentDirectory)?('/root'):(currentDirectory)}
+                                            </p>
+                                            <Dropdown.Toggle 
+                                                split
+                                                disabled={childDirectories.length==0} 
+                                                variant="outline-light" 
+                                                id="sort-split" 
+                                            />
+                                            <Dropdown.Menu className="directory-dropdown">
+                                                {
+                                                    childDirectories.map((dir, i) => {
+                                                        return (
+                                                            <Dropdown.Item
+                                                                key={i} 
+                                                                onClick={() => this.changeDir(dir)}
+                                                            >
+                                                                {dir}
+                                                            </Dropdown.Item>
+                                                        );
+                                                    })
+                                                }
+                                            </Dropdown.Menu>
+                                        </Dropdown>
+                                    </Col>
+                                </Row>
+                                <Row>
+                                    <Col>
                                     {
                                         images.map((image, i) => {
-                                            //console.log(images);
-                                            var data = image.value;
-                                            var type = image.key.slice((image.key.lastIndexOf(".") - 1 >>> 0) + 2);
-                                            var key = 'key-' + i;
-                                            //console.log(key);
-                                            return (
-                                                <Image
-                                                    key={key} 
-                                                    id={key}
-                                                    onClick={() => this.selectImage(i)}
-                                                    style={{opacity: (selected.includes(image.key)?('0.5'):(1)), width: '200px', height: '200px', margin: '10px'}}
-                                                    src={`data:image/${type};base64,${data}`}
-                                                    thumbnail
-                                                />
-                                            );
+
+                                            if (image == null) {
+                                                return null;
+                                            } else {
+                                                var data = image.value;
+                                                var type = image.key.slice((image.key.lastIndexOf(".") - 1 >>> 0) + 2);
+                                                var key = 'key-' + i;
+                                                return (
+                                                    <Image
+                                                        key={key} 
+                                                        id={key}
+                                                        onClick={() => this.selectImage(i)}
+                                                        style={{opacity: (selected.includes(image.key)?('0.5'):(1)), width: '200px', height: '200px', margin: '10px'}}
+                                                        src={`data:image/${type};base64,${data}`}
+                                                        thumbnail
+                                                    />
+                                                );
+                                            }
                                         })
                                     }
                                     </Col> 
                                 </Row>
+                                {
+                                    (noOfImageLoaded!=0)?(
+                                        <Row>
+                                            <Col>
+                                                <div style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                                    <Spinner animation="border" />
+                                                    <h3 style={{marginBottom: '0', marginLeft: '10px'}}>Loading Files, please wait</h3>
+                                                </div>
+                                            </Col>
+                                        </Row>
+                                    ):(null)
+                                }
                                 <Row>
-                                    <InputGroup>
-                                        <InputGroup.Prepend style={{marginLeft: 'auto'}}>
-                                            <Button 
-                                                variant="outline-danger" 
-                                                onClick={this.prev}
-                                                disabled={(index===1)?(true):(false)}
-                                            >
-                                                Prev
-                                            </Button>
-                                        </InputGroup.Prepend>
-                                        <ButtonGroup>
-                                            {
-                                                indexArray.map((arg, i) => {
-                                                    return (
-                                                        <Button 
-                                                            key={i} 
-                                                            active={(index===arg)?(true):(false)} 
-                                                            variant="outline-danger" 
-                                                            onClick={() => this.setImages(arg)}
-                                                        >
-                                                            {arg}
-                                                        </Button>
-                                                    );
-                                                })
-                                            }
-                                        </ButtonGroup>
-                                        <InputGroup.Append style={{marginRight: 'auto'}}>
-                                            <Button 
-                                                variant="outline-danger" 
-                                                onClick={this.next}
-                                                disabled={((index*12)>=noOfImages)?(true):(false)}
-                                            >
-                                                Next
-                                            </Button>
-                                        </InputGroup.Append>
-                                    </InputGroup>
+                                    <Col>
+                                        <InputGroup>
+                                            <InputGroup.Prepend style={{marginLeft: 'auto'}}>
+                                                <Button 
+                                                    variant="outline-light" 
+                                                    onClick={this.prev}
+                                                    disabled={(index===1)?(true):(false)}
+                                                >
+                                                    Prev
+                                                </Button>
+                                            </InputGroup.Prepend>
+                                            <ButtonGroup>
+                                                {
+                                                    indexArray.map((arg, i) => {
+                                                        return (
+                                                            <Button 
+                                                                key={i} 
+                                                                active={(index===arg)?(true):(false)} 
+                                                                variant="outline-light" 
+                                                                onClick={() => this.setImages(arg)}
+                                                            >
+                                                                {arg}
+                                                            </Button>
+                                                        );
+                                                    })
+                                                }
+                                            </ButtonGroup>
+                                            <InputGroup.Append style={{marginRight: 'auto'}}>
+                                                <Button 
+                                                    variant="outline-light" 
+                                                    onClick={this.next}
+                                                    disabled={((index*12)>=noOfImages)?(true):(false)}
+                                                >
+                                                    Next
+                                                </Button>
+                                            </InputGroup.Append>
+                                        </InputGroup>
+                                    </Col>
                                 </Row>    
                             </ContentStyle> 
                         ) : (
@@ -588,8 +786,8 @@ class Images extends Component {
                                     <Col>
                                         <ProgressBar
                                             style={{width: '100%'}} 
-                                            now={Math.round((progressBar/selected.length)*100)} 
-                                            label={`${Math.round((progressBar/selected.length)*100)}`} 
+                                            now={Math.round((progressBar/((selected.length==0)?(1):(selected.length)))*100)} 
+                                            label={`${Math.round((progressBar/((selected.length==0)?(1):(selected.length)))*100)}`} 
                                         />
                                         {
                                             (progressBar===selected.length)? (
@@ -598,13 +796,18 @@ class Images extends Component {
                                                         Download Complete
                                                     </h2>
                                                     <Button 
-                                                        variant="outline-danger"
+                                                        variant="outline-light"
                                                         onClick={this.closeDownload}
                                                     >
                                                         Close
                                                     </Button>  
                                                 </>
-                                            ):(null)
+                                            ):(
+                                                <div style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                                    <Spinner animation="border" />
+                                                    <h3 style={{marginBottom: '0', marginLeft: '10px'}}>Downloading, please wait</h3>
+                                                </div>
+                                            )
                                         }
                                         {
                                             (alert) ? (
@@ -660,5 +863,6 @@ export default connect(mapStateToProps, {
     setImageAlertFile,
     setImageSelected,
     setImageAlertAction,
-    setImageAlertActionForAll 
+    setImageAlertActionForAll,
+    setImageReset 
 })(Images);

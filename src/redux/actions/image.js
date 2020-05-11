@@ -96,3 +96,11 @@ export function setImageAlertActionForAll (arg) {
         })
     }
 }
+
+export function setImageReset () {
+    return (dispatch) => {
+        dispatch({
+            type: 'IMAGE_RESET'
+        })
+    }
+}

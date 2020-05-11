@@ -3,18 +3,28 @@ import styled from 'styled-components';
 import { Container, Row, Col, Button } from 'react-bootstrap';
 import { connect } from 'react-redux';
 import {
-    setImageProgressBar,
-    setImageAlert,
-    setImageAlertFile,
+  setImageProgressBar,
+  setImageAlert,
+  setImageAlertFile,
+  setImageReset
 } from '../redux/actions/image';
 
 import {
   setDocumentProgressBar,
   setDocumentAlertFile,
-  setDocumentAlert
+  setDocumentAlert,
+  setDocumentReset
 } from '../redux/actions/document';
+
+import {
+  setSongProgressBar,
+  setSongAlertFile,
+  setSongAlert,
+  setSongReset
+} from '../redux/actions/song';
 import Images from './Images';
 import Documents from './Documents';
+import Songs from './Songs'
 
 const electron = window.require('electron');
 const ipcRenderer = electron.ipcRenderer;
@@ -24,6 +34,8 @@ const MainContainerStyle = styled.div`
 
   display: flex;
   flex-wrap: wrap;
+  background-color: #3a7e9a;
+  color: white;
 
   * {
     box-sizing: border-box
@@ -35,7 +47,7 @@ const MainContainerStyle = styled.div`
   }
 
   .col-md-2 {
-    border-right: 2px solid black;
+    border-right: 2px solid white;
     position: sticky;
     z-index: 1000;
     align-self: flex-start;
@@ -52,6 +64,10 @@ const SideMenuStyle = styled.div`
     margin-bottom: 10%;
   }
 
+  .row {
+    margin-top: 10px;
+  }
+
   .col {
     padding-left: 0px;
     padding-right: 0px;
@@ -61,6 +77,13 @@ const SideMenuStyle = styled.div`
     display: block;
     width: 100%;
     height: 100%;
+    background-color: #3a7e9a;
+    color: white;
+    border: none;
+    :hover {
+      background-color: #dae0e5;
+      color: #212529;
+    }
   }
 
 `
@@ -70,7 +93,11 @@ class App extends Component {
     super(props);
 
     this.state = {
-      toggle_tab: true
+      toggle_tab: 0,
+      deviceConnected: true,
+      imageKey: 0,
+      documentKey: 0,
+      songKey: 0
     }
   }
 
@@ -89,25 +116,99 @@ class App extends Component {
       this.props.setDocumentAlert(true);
       this.props.setDocumentAlertFile(arg.replace(/^.*[\\\/]/, ''));
     })
+    ipcRenderer.on('song-downloaded-file-id', (event, arg) => {
+      this.props.setSongProgressBar(arg);
+    })
+    ipcRenderer.on('song-file-exist', (event, arg) => {
+      this.props.setSongAlert(true);
+      this.props.setSongAlertFile(arg.replace(/^.*[\\\/]/, ''));
+    })
+    ipcRenderer.on('device-not-connected', (event) => {
+      this.setState({
+          deviceConnected: false
+      })
+    })
+    ipcRenderer.on('reset', (event) => {
+      this.props.setDocumentReset();
+      this.props.setImageReset();
+      this.props.setSongReset();
+      this.setState({
+        imageKey: this.state.imageKey+1,
+        documentKey: this.state.documentKey+1,
+        songKey: this.state.songKey+1
+      })
+    })
   }
 
   toggleImages = () => {
     this.setState({
-      toggle_tab: true
+      toggle_tab: 0
     });
   }
 
   toggleDocuments = () => {
     this.setState({
-      toggle_tab: false
+      toggle_tab: 1
     });
+  }
+
+  toggleSongs = () => {
+    this.setState({
+      toggle_tab: 2
+    });
+  }
+
+  toggleTabs = () => {
+    const {
+      toggle_tab,
+      imageKey,
+      documentKey,
+      songKey
+    } = this.state;
+
+    switch (toggle_tab) {
+      case 0:
+      {
+        return (<Images key={imageKey} />);
+      }
+      case 1:
+      {
+        return (<Documents key={documentKey} />);
+      }
+      case 2:
+      {
+        return (<Songs key={songKey} />);
+      }
+      default:
+        return null;
+    }
+  }
+
+  tryAgain = () => {
+    this.setState({
+      deviceConnected: true
+    })
   }
 
   render() {
 
     const {
-      toggle_tab
+      toggle_tab,
+      deviceConnected
     } = this.state;
+
+    if (!deviceConnected) {
+      return (
+          <>
+              <h1>
+                  Device Not Connected
+                  <Button variant="outline-danger" onClick={this.tryAgain}>
+                      Try Again
+                  </Button>
+              </h1>
+          </>
+      )
+    }
 
     return (
       <MainContainerStyle>
@@ -125,15 +226,22 @@ class App extends Component {
                   <br/>
                   <Row>
                     <Col>
-                      <Button variant="light" onClick={this.toggleImages}>
+                      <Button active={toggle_tab==0} variant="light" onClick={this.toggleImages}>
                         Images
                       </Button>
                     </Col>
                   </Row>
                   <Row>
                     <Col>
-                      <Button variant="light" onClick={this.toggleDocuments}>
+                      <Button active={toggle_tab==1} variant="light" onClick={this.toggleDocuments}>
                         Documents
+                      </Button>
+                    </Col>
+                  </Row>
+                  <Row>
+                    <Col>
+                      <Button active={toggle_tab==2} variant="light" onClick={this.toggleSongs}>
+                        Songs
                       </Button>
                     </Col>
                   </Row>
@@ -142,11 +250,7 @@ class App extends Component {
             </Col>
             <Col md={10}>
               {
-                (toggle_tab)? (
-                  <Images />
-                ):(
-                  <Documents />
-                )
+                this.toggleTabs()
               }
             </Col>
           </Row>
@@ -166,7 +270,13 @@ export default connect(mapStateToProps, {
   setImageProgressBar,
   setImageAlert,
   setImageAlertFile,
+  setImageReset,
   setDocumentProgressBar,
+  setDocumentAlert,
   setDocumentAlertFile,
-  setDocumentAlert
+  setDocumentReset,
+  setSongProgressBar,
+  setSongAlertFile,
+  setSongAlert,
+  setSongReset
 })(App);

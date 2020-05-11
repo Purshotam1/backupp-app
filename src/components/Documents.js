@@ -9,10 +9,9 @@ import {
     Dropdown, 
     ButtonGroup, 
     ProgressBar, 
-    Toast, 
-    Card,
-    CardGroup,
-    CardColumns
+    Toast,
+    Table,
+    Spinner
 } from 'react-bootstrap';
 import { connect } from 'react-redux';
 import {
@@ -26,7 +25,8 @@ import {
     setDocumentAlertFile,
     setDocumentSelected,
     setDocumentAlertAction,
-    setDocumentAlertActionForAll
+    setDocumentAlertActionForAll,
+    setDocumentReset
 } from '../redux/actions/document'
 
 
@@ -43,7 +43,7 @@ const TopBarStyle = styled.div`
 
     position: sticky;
     top:0;
-    z-index: 1000;
+    z-index: 1;
 
     .col {
         display: flex;
@@ -52,22 +52,91 @@ const TopBarStyle = styled.div`
     }
 
     .row {
-        z-index: 1000;
-        background-color: white;
-        border-bottom: 2px solid black;
+        background-color: #3a7e9a;
+        border-bottom: 2px solid white;
+    }
+
+    .input-group-text {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+    }
+
+    .checkbox span {
+        padding: 0 0;
+    }
+
+    .unselect {
+        margin-left: auto; 
+        margin-right: auto;
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .dropdown button {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .dropdown-menu {
+        background-color: #dae0e5;
+    }
+
+    .download {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
     }
 
 `
 const ContentStyle = styled.div`
-    .col {
-        flex: 25%;
-        padding: 10px;
+    .table {
+        margin: 10px
     }
 
+    .dropdown button {
+        background-color: #3a7e9a;
+        border: none;
+        color: white;
+        :hover {
+            background-color: #dae0e5;
+            color: #212529;
+        }
+    }
+
+    .directory-dropdown {
+        height: 50vh;
+        overflow: auto;
+        background-color: #dae0e5;
+    }
 `
 
 const DownloadingStyle = styled.div`
-    
+    .progress-bar {
+        background-color: #212529;
+    }
+
+    .toast-body p {
+        color: #212529;
+    }
+
+    .toast-body button {
+        margin: 5px;
+    }
 `
 
 class Documents extends Component {
@@ -87,82 +156,160 @@ class Documents extends Component {
             selected: [],
             alertAction: null,
             alertActionForAll: false,
-            deviceConnected: true
+            currentDevice: '',
+            currentDirectory: '',
+            childDirectories: []
         };
     }
 
     componentDidMount() {
         this.setState({
-            isLoading: true
+            isLoading: true,
+            index: this.props.document.index,
+            order: this.props.document.order,
+            sortType: this.props.document.sortType,
+            selectAll: this.props.document.selectAll,
+            downloading: this.props.document.downloading,
+            selected: this.props.document.selected,
+            alertAction: this.props.document.alertAction,
+            alertActionForAll: this.props.document.alertActionForAll,
         })
         ipcRenderer.send('get-documents', this.props.document.index*30 -30);
-        ipcRenderer.on('device-not-connected', (event) => {
+        ipcRenderer.once('current-directory', (event, arg) => {
             this.setState({
-                deviceConnected: false
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
             })
         })
-        ipcRenderer.on('no-of-documents', (event, arg) => {
-            var temp = [];
+        ipcRenderer.once('no-of-documents', (event, arg) => {
             var index = this.props.document.index;
-            for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
-                if ((i*30 -30) < arg)
-                    temp.push(i);
-                else
-                    break;
+            this.setIndexArray(index, arg);
+            if (arg==0) {
+                this.setState({
+                    isLoading: false
+                })
             }
-            this.setState({
-                noOfDocuments: arg,
-                indexArray: temp
-            });
         })
+        ipcRenderer.removeAllListeners('documents');
         ipcRenderer.on('documents', (event, arg) => {
+            //console.log(arg);
             this.setState({
                 documents: arg,
-                index: this.props.document.index,
-                order: this.props.document.order,
-                sortType: this.props.document.sortType,
-                selectAll: this.props.document.selectAll,
-                downloading: this.props.document.downloading,
-                selected: this.props.document.selected,
-                alertAction: this.props.document.alertAction,
-                alertActionForAll: this.props.document.alertActionForAll,
                 isLoading: false
             });
         });
-        
-        ipcRenderer.on('reset', (event) => {
-            this.props.setDocumentIndex(1);
-            this.props.setDocumentSortType(0);
-            this.props.setDocumentOrder(true);
-            this.props.setDocumentSelectAll(false);
-            this.props.setDocumentProgressBar(0);
-            this.props.setDocumentDownloading(false);
-            this.props.setDocumentAlert(false);
-            this.props.setDocumentAlertFile('');
-            this.props.setDocumentSelected([]);
-            this.props.setDocumentAlertAction(null);
-            this.props.setDocumentAlertActionForAll(false);
+    }
 
-            this.setState({
-                documents: [],
-                index: 1,
-                sortType: 0,
-                order: true,
-                selectAll: false,
-                downloading: false,
-                selected: [],
-                alertAction: null,
-                alertActionForAll: false,
-                deviceConnected: true,
+    previousDir = () => {
+        this.setState({
+            isLoading: true,
+        })
+        this.props.setDocumentReset();
+        this.props.setDocumentOrder(this.state.order);
+        this.props.setDocumentSortType(this.state.sortType);
+        ipcRenderer.send('change-document-directory', {
+            isChild: false
+        });
+        ipcRenderer.once('document-directory-changed', (event, arg) => {
+            const {
+                sortType,
+                order
+            } = this.state;
+    
+            if (sortType===0) {
+                ipcRenderer.send('document-sort-by-name', order);
+            } else if (sortType===1) {
+                ipcRenderer.send('document-sort-by-size', order);
+            } else {
+                ipcRenderer.send('document-sort-by-last-modified', order);
+            }
+
+            ipcRenderer.once('document-sorted', (event) => {
+                if (arg.isEmpty) {
+                    this.setState({
+                        isLoading: false
+                    })
+                } else {
+                    ipcRenderer.send('get-documents', this.props.document.index*30 -30);
+                }
             })
+        })
+        ipcRenderer.once('current-directory', (event, arg) => {
+            this.setState({
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
+            })
+        })
+        ipcRenderer.once('no-of-documents', (event, arg) => {
+            this.setIndexArray(this.props.document.index, arg);
         })
     }
 
-    tryAgain = () => {
-        ipcRenderer.send('get-documents', this.props.document.index*30 -30);
+    changeDir = (dir) => {
         this.setState({
-            deviceConnected: true
+            isLoading: true,
+            documents: []
         })
+        this.props.setDocumentReset();
+        this.props.setDocumentOrder(this.state.order);
+        this.props.setDocumentSortType(this.state.sortType);
+        ipcRenderer.send('change-document-directory', {
+            name: dir,
+            isChild: true
+        });
+        ipcRenderer.once('document-directory-changed', (event, arg) => {
+            const {
+                sortType,
+                order
+            } = this.state;
+    
+            if (sortType===0) {
+                ipcRenderer.send('document-sort-by-name', order);
+            } else if (sortType===1) {
+                ipcRenderer.send('document-sort-by-size', order);
+            } else {
+                ipcRenderer.send('document-sort-by-last-modified', order);
+            }
+
+            ipcRenderer.once('document-sorted', (event) => {
+                if (arg.isEmpty) {
+                    this.setState({
+                        isLoading: false
+                    })
+                } else {
+                    ipcRenderer.send('get-documents', this.props.document.index*30 -30);
+                }
+            })
+        })
+
+        ipcRenderer.once('current-directory', (event, arg) => {
+            this.setState({
+                currentDevice: arg.currentDevice,
+                currentDirectory: arg.parent,
+                childDirectories: arg.childs
+            })
+        })
+        ipcRenderer.once('no-of-documents', (event, arg) => {
+            this.setIndexArray(this.props.document.index, arg);
+        })
+    }
+
+    setIndexArray = (index, totalDocuments) => {
+        var temp = [];
+        for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
+            if ((i*30 -30) < totalDocuments)
+                temp.push(i);
+            else
+                break;
+        }
+        this.props.setDocumentIndex(index);
+        this.setState({
+            index: index,
+            indexArray: temp,
+            noOfDocuments: totalDocuments,
+        });
     }
 
     setOrder = (arg) => {
@@ -200,6 +347,10 @@ class Documents extends Component {
             const index = 1;
             const noOfDocuments = this.state.noOfDocuments;
             ipcRenderer.send('get-more-documents', index*30 -30);
+            ipcRenderer.once('no-of-documents', (event, arg) => {
+                var index = this.props.document.index;
+                this.setIndexArray(index, arg);
+            })
             ipcRenderer.once('more-documents', (event, arg) => {
                 var temp = [];
                 for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
@@ -226,6 +377,10 @@ class Documents extends Component {
         const index = this.state.index + 1;
         const noOfDocuments = this.state.noOfDocuments;
         ipcRenderer.send('get-more-documents', index*30 -30);
+        ipcRenderer.once('no-of-documents', (event, arg) => {
+            var index = this.props.document.index;
+            this.setIndexArray(index, arg);
+        })
         ipcRenderer.once('more-documents', (event, arg) => {
             var temp = [];
             for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
@@ -242,6 +397,7 @@ class Documents extends Component {
                 isLoading: false
             });
         });
+        window.scrollTo(0, 0);
     }
 
     prev = () => {
@@ -251,6 +407,10 @@ class Documents extends Component {
         const index = this.state.index - 1;
         const noOfDocuments = this.state.noOfDocuments;
         ipcRenderer.send('get-more-documents', index*30 -30)
+        ipcRenderer.once('no-of-documents', (event, arg) => {
+            var index = this.props.document.index;
+            this.setIndexArray(index, arg);
+        })
         ipcRenderer.once('more-documents', (event, arg) => {
             var temp = [];
             for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
@@ -267,6 +427,7 @@ class Documents extends Component {
                 isLoading: false
             });
         });
+        window.scrollTo(0, 0);
     }
 
     setDocuments = (index) => {
@@ -275,6 +436,10 @@ class Documents extends Component {
         })
         const noOfDocuments = this.state.noOfDocuments;
         ipcRenderer.send('get-more-documents', (index*30)-30)
+        ipcRenderer.once('no-of-documents', (event, arg) => {
+            var index = this.props.document.index;
+            this.setIndexArray(index, arg);
+        })
         ipcRenderer.once('more-documents', (event, arg) => {
             var temp = [];
             for (var i=(((index-4)<=0)?(1):(index-4));i<=(((index+5)<10)?(10):(index+5));i++) {
@@ -291,6 +456,7 @@ class Documents extends Component {
                 isLoading: false
             });
         });
+        window.scrollTo(0, 0);
     }
 
     selectDocument = (i) => {
@@ -301,7 +467,7 @@ class Documents extends Component {
             let {
                 selected
             } = this.state;
-            selected.splice(selected.indexOf(this.state.documents[i]), 1);
+            selected.splice(selected.indexOf(this.state.documents[i].path), 1);
             doc.style.opacity=1;
             this.props.setDocumentSelected(selected);
             this.props.setDocumentSelectAll(false);
@@ -313,7 +479,7 @@ class Documents extends Component {
             let {
                 selected
             } = this.state;
-            selected.push(this.state.documents[i]);
+            selected.push(this.state.documents[i].path);
             doc.style.opacity=0.5;
             this.props.setDocumentSelected(selected);
             this.setState({
@@ -422,7 +588,9 @@ class Documents extends Component {
             selected,
             alertActionForAll,
             alertAction,
-            deviceConnected
+            currentDevice,
+            currentDirectory,
+            childDirectories
         } = this.state;
 
         const {
@@ -431,24 +599,12 @@ class Documents extends Component {
             progressBar
         } = this.props.document;
 
-        if (!deviceConnected) {
+        if (isLoading) {
             return (
-                <>
-                    <h1>
-                        Device Not Connected
-                        <Button variant="outline-danger" onClick={this.tryAgain}>
-                            Try Again
-                        </Button>
-                    </h1>
-                </>
-            )
-        }
-
-        if (isLoading||documents.length===0) {
-            return (
-                <h1 style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                    Loading...
-                </h1>
+                <div style={{height: '100vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    <Spinner animation="border" />
+                    <h3 style={{marginBottom: '0', marginLeft: '10px'}}>Loading Files, please wait</h3>
+                </div>
             );
         }
 
@@ -470,7 +626,7 @@ class Documents extends Component {
                             <Col>
                                 <InputGroup>
                                     <Button
-                                        style={{marginLeft: 'auto', marginRight: 'auto'}} 
+                                        className="unselect" 
                                         onClick={this.unselectAll} 
                                         variant="light"
                                     >
@@ -520,7 +676,7 @@ class Documents extends Component {
                                 </Dropdown>
                             </Col>
                             <Col>
-                                <Button variant="light" onClick={this.download}>Download</Button>
+                                <Button className="download" variant="light" onClick={this.download}>Download</Button>
                             </Col>
                         </Row>
                     </TopBarStyle>
@@ -529,34 +685,79 @@ class Documents extends Component {
                             <ContentStyle>
                                 <Row>
                                     <Col>
-                                        <CardColumns>
-                                        {
-                                            documents.map((document, i) => {
-                                                //console.log(Documents);
-                                                var name = document.replace(/^.*[\\\/]/, '');
-                                                var key = 'key-' + i;
-                                                //console.log(key);
-                                                return (
-                                                    <Card
-                                                        id={key}
-                                                        key={key} 
-                                                        bg="info"
-                                                        onClick={() => this.selectDocument(i)}
-                                                        style={{opacity: (selected.includes(document)?('0.5'):(1))}}
-                                                    >
-                                                        <Card.Body>{name}</Card.Body>
-                                                    </Card>
-                                                );
-                                            })
-                                        }
-                                        </CardColumns>
+                                        <Dropdown as={ButtonGroup}>
+                                            <Button
+                                                onClick={this.previousDir}
+                                                disabled={(currentDirectory==currentDevice)}
+                                                variant='outline-light'
+                                            >
+                                                Back
+                                            </Button>
+                                            <p style={{margin: 'auto'}}>
+                                                {(currentDevice==currentDirectory)?('/root'):(currentDirectory)}
+                                            </p>
+                                            <Dropdown.Toggle split variant="outline-light" id="sort-split" />
+                                            <Dropdown.Menu className="directory-dropdown">
+                                                {
+                                                    childDirectories.map((dir, i) => {
+                                                        return (
+                                                            <Dropdown.Item
+                                                                key={i} 
+                                                                onClick={() => this.changeDir(dir)}
+                                                            >
+                                                                {dir}
+                                                            </Dropdown.Item>
+                                                        );
+                                                    })
+                                                }
+                                            </Dropdown.Menu>
+                                        </Dropdown>
+                                    </Col>
+                                </Row>
+                                <Row>
+                                    <Col>
+                                        <Table striped bordered hover>
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Name</th>
+                                                    <th>Size (B)</th>
+                                                    <th>Last Modified (dd/mm/yyyy)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            {
+                                                documents.map((document, i) => {
+                                                    //console.log(document);
+                                                    var name = document.name.replace(/_/g,"-");
+                                                    var size = document.size;
+                                                    var date = new Date(document.lastModified);
+                                                    var key = 'key-' + i;
+                                                    //console.log(date);
+                                                    return (
+                                                        <tr
+                                                            style={{opacity: (selected.includes(document.path)?('0.5'):(1))}} 
+                                                            key={key} 
+                                                            id={key} 
+                                                            onClick={() => this.selectDocument(i)}
+                                                        >
+                                                            <td>{i+1}</td>
+                                                            <td style={{maxWidth: '250px', overflow: 'hidden'}}><p>{name}</p></td>
+                                                            <td>{size}</td>
+                                                            <td>{date.getDate()}/{date.getMonth()}/{date.getFullYear()}</td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            }
+                                            </tbody>
+                                        </Table>
                                     </Col> 
                                 </Row>
                                 <Row>
                                     <InputGroup>
                                         <InputGroup.Prepend style={{marginLeft: 'auto'}}>
                                             <Button 
-                                                variant="outline-danger" 
+                                                variant="outline-light" 
                                                 onClick={this.prev}
                                                 disabled={(index===1)?(true):(false)}
                                             >
@@ -570,7 +771,7 @@ class Documents extends Component {
                                                         <Button 
                                                             key={i} 
                                                             active={(index===arg)?(true):(false)} 
-                                                            variant="outline-danger" 
+                                                            variant="outline-light" 
                                                             onClick={() => this.setDocuments(arg)}
                                                         >
                                                             {arg}
@@ -581,7 +782,7 @@ class Documents extends Component {
                                         </ButtonGroup>
                                         <InputGroup.Append style={{marginRight: 'auto'}}>
                                             <Button 
-                                                variant="outline-danger" 
+                                                variant="outline-light" 
                                                 onClick={this.next}
                                                 disabled={((index*30)>=noOfDocuments)?(true):(false)}
                                             >
@@ -607,13 +808,18 @@ class Documents extends Component {
                                                         Download Complete
                                                     </h2>
                                                     <Button 
-                                                        variant="outline-danger"
+                                                        variant="outline-light"
                                                         onClick={this.closeDownload}
                                                     >
                                                         Close
                                                     </Button>  
                                                 </>
-                                            ):(null)
+                                            ):(
+                                                <div style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                                    <Spinner animation="border" />
+                                                    <h3 style={{marginBottom: '0', marginLeft: '10px'}}>Downloading, please wait</h3>
+                                                </div>
+                                            )
                                         }
                                         {
                                             (alert) ? (
@@ -669,5 +875,6 @@ export default connect(mapStateToProps, {
     setDocumentAlertFile,
     setDocumentSelected,
     setDocumentAlertAction,
-    setDocumentAlertActionForAll 
+    setDocumentAlertActionForAll,
+    setDocumentReset 
 })(Documents);

@@ -96,3 +96,11 @@ export function setDocumentAlertActionForAll (arg) {
         })
     }
 }
+
+export function setDocumentReset () {
+    return (dispatch) => {
+        dispatch({
+            type: 'DOCUMENT_RESET',
+        })
+    }
+}
