@@ -1,3 +1,7 @@
+A Desktop application made using electronJs. It is used to backup your files such as images, documents, songs, to your PC. Select all files or select a few files to copy. Files can be sorted according to name, size, and Date Modified. It also has an option to keep the same directory structure on the PC as there was on mobile during copying the files. Images are shown in the UI, while documents and songs are listed in tables.
+
+
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
